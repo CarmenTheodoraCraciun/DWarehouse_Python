@@ -1,0 +1,6 @@
+.env
+\venv
+dw_cassandra-token.json
+\data
+\__pycache__
+dw_all.pdf

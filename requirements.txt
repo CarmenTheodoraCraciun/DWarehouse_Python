@@ -1,0 +1,6 @@
+cassandra-driver
+fastapi
+uvicorn
+python-dotenv
+requests
+python-multipart
