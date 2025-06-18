@@ -47,7 +47,7 @@ async def ingest_data(
         return {
             "status": "success",
             "symbol": symbol,
-            "records_ingested": result.get("records", 0)
+            "records_ingested": result.get("records_ingested", 0)
         }
     except Exception as e:
         raise HTTPException(status_code=500, detail=str(e))

@@ -6,13 +6,14 @@ def initialize_required_data(session):
     data_source_repo = DataSourceRepository(session)
     
     if not data_source_repo.find_latest('ALPHAVANTAGE'):
-        attributes = ['open', 'high', 'low', 'close', 'volume']
+        attributes = {'open', 'high', 'low', 'close', 'volume'}  # Folosește set, nu listă
+        
         new_source = {
             'id': 'ALPHAVANTAGE',
-            'system_time': datetime.now(),  # Acum funcționează
+            'system_time': datetime.now(),
             'name': 'Alpha Vantage',
             'description': 'Financial data from Alpha Vantage',
-            'attributes': json.dumps(attributes)
+            'attributes': attributes  # Direct set
         }
         data_source_repo.save(new_source)
         print("Created ALPHAVANTAGE data source")

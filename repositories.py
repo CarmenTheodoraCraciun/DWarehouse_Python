@@ -1,7 +1,8 @@
 from typing import TypeVar, Generic, List, Optional, Dict, Any, Iterable
 from cassandra.cluster import Session
-from cassandra.query import SimpleStatement, dict_factory
+from cassandra.query import BatchStatement, dict_factory
 from datetime import datetime
+import json
 
 E = TypeVar('E')  # Entity type
 K = TypeVar('K')  # Key type
@@ -37,14 +38,18 @@ class AssetsRepository(WarehouseRepository):
         INSERT INTO asset 
         (id, system_time, name, description, attributes) 
         VALUES (%s, %s, %s, %s, %s)
+        IF NOT EXISTS
         """
-        self.session.execute(query, (
+        result = self.session.execute(query, (
             asset['id'],
             asset['system_time'],
             asset.get('name', ''),
             asset.get('description', ''),
             asset.get('attributes', {})
         ))
+        
+        if not result.one().applied:
+            raise Exception("Asset already exists")
         return asset
 
     def delete(self, asset: Dict) -> None:
@@ -75,22 +80,26 @@ class DataSourceRepository(WarehouseRepository):
     def __init__(self, session: Session):
         super().__init__(session, "data_source")
 
-    def save(self, entity):
-        query = f"""
-        INSERT INTO {self.table_name} 
+    def save(self, entity) -> bool:
+        query = """
+        INSERT INTO data_source 
         (id, system_time, attributes, created_at, description, name) 
         VALUES (%s, %s, %s, %s, %s, %s)
+        IF NOT EXISTS
         """
-        self.session.execute(query, (
+        result = self.session.execute(query, (
             entity['id'],
             entity['system_time'],
-            entity.get('attributes', set()),  # Folosește set gol ca default
+            json.dumps(list(entity.get('attributes', set()))),
             entity.get('created_at', datetime.now()),
             entity['description'],
             entity['name']
         ))
-        return query
         
+        if not result.one().applied:
+            raise Exception("Data source already exists")
+        return True
+    
     def delete(self, data_source: Dict) -> None:
         query = "DELETE FROM data_source WHERE id = %s AND system_time = %s"
         self.session.execute(query, (data_source['id'], data_source['system_time']))
@@ -132,10 +141,41 @@ class TimeSeriesRepository(WarehouseRepository):
             data_point['business_date_year'],
             data_point['business_date'],
             data_point['system_time'],
-            data_point['data_values']  # Already a map
+            {k: str(v) for k, v in data_point["data_values"].items()}
         ))
         return data_point
-
+    
+    def save_batch(self, data_points: List[Dict]) -> None:
+        """Salvează un lot de înregistrări eficient"""
+        if not data_points:
+            return
+        
+        # Pregătim interogarea
+        query = """
+        INSERT INTO time_series_data 
+        (asset_id, data_source_id, business_date_year, 
+         business_date, system_time, data_values) 
+        VALUES (?, ?, ?, ?, ?, ?)
+        """
+        prepared = self.session.prepare(query)
+        
+        # Creăm un batch
+        batch = BatchStatement()
+        
+        for point in data_points:
+            safe_values = {k: str(v) for k, v in point['data_values'].items()}
+            batch.add(prepared, (
+                point['asset_id'],
+                point['data_source_id'],
+                point['business_date_year'],
+                point['business_date'],
+                point['system_time'],
+                safe_values
+            ))
+        
+        # Executăm batch-ul
+        self.session.execute(batch)
+    
     def delete(self, data_point: Dict) -> None:
         query = """
         DELETE FROM time_series_data 
