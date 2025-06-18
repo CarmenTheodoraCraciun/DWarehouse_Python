@@ -4,7 +4,15 @@ from cassandra.cqlengine import connection, management
 from dotenv import load_dotenv
 import os
 
-from entites import Asset, DataSource, TimeSeriesData  # asigură-te că numele fișierului este corect: "entities", nu "entites"
+from entities import (
+    Asset, 
+    DataSource, 
+    TimeSeriesData,
+    AssetCounts,
+    AvgVolumePerAsset,
+    HighLowPerYear,
+    MonthlyAvgClose
+)
 
 def create_tables():
     # Încarcă variabilele din fișierul .env
@@ -15,7 +23,7 @@ def create_tables():
     ASTRA_DB_KEYSPACE = os.getenv("ASTRA_DB_KEYSPACE")
     ASTRA_DB_APPLICATION_TOKEN = os.getenv("ASTRA_DB_APPLICATION_TOKEN")
 
-    # Setează permisiunea pentru schema management (ca să nu mai primești warning)
+    # Setează permisiunea pentru schema management
     os.environ["CQLENG_ALLOW_SCHEMA_MANAGEMENT"] = "1"
 
     # Configurare conexiune Astra DB
@@ -36,6 +44,7 @@ def create_tables():
     management.sync_table(Asset)
     management.sync_table(DataSource)
     management.sync_table(TimeSeriesData)
+    management.sync_table(Prediction)
 
 if __name__ == "__main__":
     create_tables()

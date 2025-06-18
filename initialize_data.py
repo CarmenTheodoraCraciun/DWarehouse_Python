@@ -1,5 +1,4 @@
 from datetime import datetime
-import json
 from repositories import DataSourceRepository
 
 def initialize_required_data(session):

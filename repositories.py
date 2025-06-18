@@ -1,7 +1,7 @@
 from typing import TypeVar, Generic, List, Optional, Dict, Any, Iterable
 from cassandra.cluster import Session
 from cassandra.query import BatchStatement, dict_factory
-from datetime import datetime
+from datetime import datetime, date
 import json
 
 E = TypeVar('E')  # Entity type
@@ -203,30 +203,77 @@ class TimeSeriesRepository(WarehouseRepository):
             key['business_date_year']
         ))
 
-    def find_latest(self, key: Dict) -> Optional[Dict]:
-        query = """
-        SELECT * FROM time_series_data 
-        WHERE asset_id = %s AND data_source_id = %s 
-        AND business_date_year = %s 
-        ORDER BY business_date DESC, system_time DESC 
-        LIMIT 1
+    def find_latest_per_date(
+        self,
+        asset_id: str,
+        data_source_id: str,
+        start_date: date,
+        end_date: date
+    ) -> List[Dict]:
         """
-        result = self.session.execute(query, (
-            key['asset_id'],
-            key['data_source_id'],
-            key['business_date_year']
-        ))
-        return result.one()
+        Returnează cea mai recentă versiune pentru fiecare dată într-un interval
+        """
+        # Obținem toate anii din interval
+        years = list(range(start_date.year, end_date.year + 1))
+        all_data = []
+        
+        # Colectăm datele pentru fiecare an
+        for year in years:
+            key = {
+                'asset_id': asset_id,
+                'data_source_id': data_source_id,
+                'business_date_year': year
+            }
+            # Filtrăm doar datele din intervalul specificat
+            year_data = self.find_all(
+                key,
+                start_date if year == start_date.year else date(year, 1, 1),
+                end_date if year == end_date.year else date(year, 12, 31)
+            )
+            all_data.extend(year_data)
+        
+        # Grupăm după dată și selectăm cea mai recentă înregistrare
+        latest_per_date = {}
+        for row in all_data:
+            row_dict = dict(row)
+            business_date = row_dict['business_date']
+            
+            if business_date not in latest_per_date or \
+            row_dict['system_time'] > latest_per_date[business_date]['system_time']:
+                latest_per_date[business_date] = row_dict
+        
+        # Sortare descrescătoare după dată
+        sorted_dates = sorted(latest_per_date.keys(), reverse=True)
+        return [latest_per_date[d] for d in sorted_dates]
 
-    def find_all(self, key: Dict) -> List[Dict]:
+    def find_all(
+        self, 
+        key: Dict, 
+        start_date: date = None, 
+        end_date: date = None
+    ) -> List[Dict]:
+        """
+        Găsește toate datele de serie temporală cu filtrare opțională
+        """
         query = """
         SELECT * FROM time_series_data 
-        WHERE asset_id = %s AND data_source_id = %s 
+        WHERE asset_id = %s 
+        AND data_source_id = %s 
         AND business_date_year = %s
         """
-        result = self.session.execute(query, (
+        params = [
             key['asset_id'],
             key['data_source_id'],
             key['business_date_year']
-        ))
+        ]
+        
+        # Adăugăm filtrele pentru dată dacă sunt specificate
+        if start_date:
+            query += " AND business_date >= %s"
+            params.append(start_date)
+        if end_date:
+            query += " AND business_date <= %s"
+            params.append(end_date)
+        
+        result = self.session.execute(query, tuple(params))
         return list(result)
