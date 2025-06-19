@@ -1,5 +1,6 @@
 cassandra-driver
 fastapi
+flask
 uvicorn
 python-dotenv
 requests

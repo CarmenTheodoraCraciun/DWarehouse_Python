@@ -18,19 +18,30 @@ cluster = Cluster(cloud=cloud_config, auth_provider=auth_provider)
 session = cluster.connect()
 session.set_keyspace(ASTRA_DB_KEYSPACE)
 
-print("✅ Connected to Cassandra for model training")
+print("Connected to Cassandra for model training")
 
-def get_historical_data(asset_id='BTC', data_source_id='ALPHAVANTAGE'):
+def get_historical_data(asset_id='IBM', data_source_id='ALPHAVANTAGE'):
     """Obține datele istorice pentru un asset"""
-    query = """
-    SELECT business_date, data_values
-    FROM time_series_data
-    WHERE asset_id = %s AND data_source_id = %s
-    ORDER BY business_date DESC
-    LIMIT 100
-    """
-    rows = session.execute(query, (asset_id, data_source_id))
-    return list(rows)
+    # Obținem ultimii 3 ani pentru a acoperi partitionarea
+    current_year = datetime.now().year
+    years = [current_year, current_year - 1, current_year - 2]
+    
+    historical_data = []
+    
+    for year in years:
+        query = """
+        SELECT business_date, data_values
+        FROM time_series_data
+        WHERE asset_id = %s 
+          AND data_source_id = %s 
+          AND business_date_year = %s
+        """
+        rows = session.execute(query, (asset_id, data_source_id, year))
+        historical_data.extend(list(rows))
+    
+    # Sortăm descrescător după dată și luăm ultimele 100 de înregistrări
+    historical_data.sort(key=lambda x: x.business_date, reverse=True)
+    return historical_data[:100]
 
 def calculate_moving_average(data, window_size=5):
     """Calculează media mobilă simplă"""
@@ -87,20 +98,31 @@ def save_predictions(asset_id, predictions):
         ))
 
 if __name__ == "__main__":
-    # 1. Obține date istorice
-    historical_data = get_historical_data()
-    
-    # Extrage prețurile de închidere
-    closing_prices = [float(row.data_values['close']) for row in historical_data]
-    
-    # 2. Calculează media mobilă
-    moving_avg = calculate_moving_average(closing_prices)
-    
-    # 3. Generează predicții pentru următoarele 7 zile
-    predictions = predict_future_prices(closing_prices.copy())
-    
-    # 4. Salvează predicțiile
-    save_predictions('BTC', predictions)
-    print("✅ Predictions saved to Cassandra")
-    
-    cluster.shutdown()
+    try:
+        # 1. Obține date istorice
+        historical_data = get_historical_data()
+        
+        if not historical_data:
+            raise Exception("Nu s-au găsit date istorice")
+        
+        print(f"S-au găsit {len(historical_data)} înregistrări istorice")
+        
+        # Extrage prețurile de închidere
+        closing_prices = [float(row.data_values['close']) for row in historical_data]
+        
+        # 2. Calculează media mobilă
+        moving_avg = calculate_moving_average(closing_prices)
+        
+        # 3. Generează predicții pentru următoarele 7 zile
+        predictions = predict_future_prices(closing_prices.copy())
+        
+        # 4. Salvează predicțiile
+        save_predictions('IBM', predictions)
+        print("Predicțiile au fost salvate în Cassandra")
+        
+    except Exception as e:
+        print(f"Eroare: {str(e)}")
+        import traceback
+        traceback.print_exc()
+    finally:
+        cluster.shutdown()

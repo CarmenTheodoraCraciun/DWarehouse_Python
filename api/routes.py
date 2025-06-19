@@ -1,6 +1,6 @@
 from flask import Blueprint, jsonify, request
 from datetime import datetime
-from services.cassandra_service import cassandra_service
+from cassandra_service import cassandra_service
 
 api = Blueprint('api', __name__)
 

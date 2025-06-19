@@ -8,10 +8,7 @@ from entities import (
     Asset, 
     DataSource, 
     TimeSeriesData,
-    AssetCounts,
-    AvgVolumePerAsset,
-    HighLowPerYear,
-    MonthlyAvgClose
+    Prediction
 )
 
 def create_tables():
