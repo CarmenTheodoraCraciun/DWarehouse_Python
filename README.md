@@ -1,7 +1,5 @@
 # 🏦 Financial Data Warehouse with Cassandra & Alpha Vantage
 
-![Data Warehouse Architecture](image-2.png)
-
 ## 📌 Overview
 This project implements a financial data warehouse using Apache Cassandra (via DataStax Astra DB), enabling stock market data ingestion from Alpha Vantage, storage, analytics, machine learning price prediction, and real-time dashboard visualization — all through clean REST APIs.
 
